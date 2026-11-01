@@ -1,8 +1,8 @@
 import type { Command } from 'commander';
-import { ensureDaemon } from '../daemon/client.js';
 import type { CaptureParams } from '../daemon/protocol.js';
+import { captureCommand } from '../engine/commands.js';
 import { LocatorSyntaxError, parseLocator } from '../engine/locators.js';
-import { exitCodeForDigest, formatDigestText, type RunDigest } from '../evidence/digest.js';
+import { exitCodeForDigest, formatDigestText } from '../evidence/digest.js';
 import { findProjectRoot } from '../paths.js';
 import { fail, printResult, runCommand } from './output.js';
 
@@ -32,8 +32,7 @@ Example:
             throw error;
           }
         }
-        const handle = await ensureDaemon(findProjectRoot());
-        const digest = await handle.call<RunDigest>('capture', params);
+        const digest = await captureCommand(findProjectRoot(), params);
         printResult(command, digest, () => formatDigestText(digest));
         return exitCodeForDigest(digest);
       }),

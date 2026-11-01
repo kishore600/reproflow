@@ -40,6 +40,8 @@ export interface Harness {
   /** Isolated REPROFLOW_HOME. */
   home: string;
   stateFile: string;
+  /** The environment every CLI call gets (REPROFLOW_HOME, headless, the shop password). */
+  env: Record<string, string>;
   cli(
     args: string[],
     options?: { input?: string; env?: Record<string, string> },
@@ -73,6 +75,7 @@ export async function createHarness(options: { bug?: boolean } = {}): Promise<Ha
     project,
     home,
     stateFile: join(home, 'daemons', `${daemonKey(project)}.json`),
+    env,
     cli,
     async act(...args) {
       const result = await cli(['do', ...args]);

@@ -1,4 +1,5 @@
 import { ensureDaemon } from '../daemon/client.js';
+import type { CaptureParams } from '../daemon/protocol.js';
 import { ReproflowError } from '../errors.js';
 import { buildDigest, type RunDigest } from '../evidence/digest.js';
 import { type LoadedFlow, loadFlow } from '../flows/load.js';
@@ -62,5 +63,20 @@ export async function runFlowCommand(
     const digest = errorDigest(name, error, loaded?.flow.steps.length ?? 0, Date.now() - started);
     if (error.code !== 'flow_not_found') await appendStat(root, statFromDigest(digest));
     return digest;
+  }
+}
+
+/**
+ * Writes an evidence bundle for the active tab, always returning a digest (a daemon or browser
+ * problem comes back as `status: "error"`). Shared by `reproflow capture` and the MCP server.
+ */
+export async function captureCommand(root: string, params: CaptureParams = {}): Promise<RunDigest> {
+  const started = Date.now();
+  try {
+    const handle = await ensureDaemon(root);
+    return await handle.call<RunDigest>('capture', params);
+  } catch (error) {
+    if (!(error instanceof ReproflowError)) throw error;
+    return errorDigest(null, error, 0, Date.now() - started);
   }
 }

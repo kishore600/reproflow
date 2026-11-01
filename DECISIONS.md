@@ -195,3 +195,22 @@ Choices made where the brief was silent or ambiguous. Newest sections at the bot
   matters, so `npm run demo` edits the saved YAML to add the `expect_text` step, as an agent or a
   person would. It exits non-zero if the failing digest is over 2,000 characters or misses the console
   error or the 500, so it works as a smoke test.
+
+## MCP (phase 7)
+
+- **One implementation, two front ends.** `list`, `run`, `capture` and `save` live in plain
+  functions (`listFlowSummaries`, `runFlowCommand`, `captureCommand`, `saveFlow`) that the CLI and
+  the MCP tools both call, so the digests cannot drift apart. A test compares them.
+- **Dependency:** `@modelcontextprotocol/sdk`: the stdio server and (in tests) client. It is imported
+  lazily, so `reproflow list` and friends do not load it.
+- **Result shape.** A tool returns one text block holding the digest JSON. `isError` is set only for
+  `status: "error"` (the call could not run); a flow that ran and failed is a result the agent must
+  read, not a tool failure. `structuredContent` is not used: the digest has no fixed output schema
+  (lists shrink to fit 2,000 characters).
+- **Scope.** `reproflow_run` and `reproflow_save` are the four tools the brief names; there is no
+  `do` tool. Exploring step by step stays with the CLI, which records the session `reproflow_save`
+  needs.
+- **stdout belongs to the protocol.** The server prints nothing else: the daemon's output goes to its
+  log file, and every command function returns data instead of printing.
+- **Refactor side effect:** `save` refusals (bad name, existing flow, empty session) are now
+  `flow_invalid` digests with exit code 2 in the CLI too, not bare stderr messages.

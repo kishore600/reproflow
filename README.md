@@ -357,6 +357,47 @@ $ reproflow stats
 spends per browser step; change it with `--tokens-per-step`, `REPROFLOW_TOKENS_PER_STEP` or
 `"tokens_per_step"` in `.reproflow/config.json`.
 
+### `reproflow mcp`
+
+An MCP server over stdio, for agents and clients that prefer tools to a CLI. It works on the project
+it is started in and exposes four tools. Each returns the same digest JSON the CLI prints, as one
+text block:
+
+| Tool                | Arguments                                                      | Same as                         |
+| ------------------- | -------------------------------------------------------------- | ------------------------------- |
+| `reproflow_list`    | none                                                           | `reproflow list`                |
+| `reproflow_run`     | `flow`, `params?` (object), `headed?`, `trace?`, `keep_going?` | `reproflow run`                 |
+| `reproflow_capture` | `full_page?`, `locator?`                                       | `reproflow capture`             |
+| `reproflow_save`    | `name`, `description?`, `last?`, `force?`                      | `reproflow save --from-session` |
+
+```bash
+claude mcp add reproflow -- reproflow mcp
+```
+
+or, in any client's MCP config:
+
+```json
+{ "mcpServers": { "reproflow": { "command": "reproflow", "args": ["mcp"] } } }
+```
+
+A failing flow is a normal result (`ok: false`, `status: "failed"`); a tool result is marked
+`isError` only when the call could not run (unknown flow, invalid YAML, no browser, a refused save).
+`reproflow_run` replays flows; to explore a page step by step use the `reproflow do` CLI, which
+records the session that `reproflow_save` turns into a flow.
+
+Calling `reproflow_list` returns (shown here as the tool result a client receives):
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"flows\":[{\"name\":\"repro-cart-total\",\"description\":\"Add a product and check the cart total\",\"params\":[\"sku:string\"]}]}"
+    }
+  ]
+}
+```
+
 ## Flow file format
 
 Flows live in `.reproflow/flows/<name>.yaml`. A JSON Schema for editors is in

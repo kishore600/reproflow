@@ -65,11 +65,11 @@ Decisions that deviate from or interpret the brief live in [DECISIONS.md](DECISI
 
 ## Phase 7 - MCP (only if 1-6 fully green)
 
-- [ ] `reproflow mcp` over stdio with reproflow_list/run/capture/save
+- [x] `reproflow mcp` over stdio with reproflow_list/run/capture/save
 
 ## Definition of done
 
-- [ ] build, typecheck, lint, test pass
-- [ ] `npm run demo` shows a failing digest (< 2,000 chars, console error + 500) then a passing one
-- [ ] README documents every command with an example and its JSON output
-- [ ] REPORT.md written
+- [x] build, typecheck, lint, test pass
+- [x] `npm run demo` shows a failing digest (< 2,000 chars, console error + 500) then a passing one
+- [x] README documents every command with an example and its JSON output
+- [x] REPORT.md written
