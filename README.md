@@ -10,7 +10,7 @@ the repo, and replay that flow later with zero AI calls. Every command prints a 
 (at most 2,000 characters) with paths to screenshots and logs on disk.
 
 > Status: under construction. This README grows with each build phase; see [PLAN.md](PLAN.md).
-> Documented so far: sessions, login, the `do` actions, `capture`, flows (`list`, `describe`, `run`) and the digest.
+> Documented so far: every command except `doctor` and `mcp`, the flow file format and the digest.
 
 ## Concepts
 
@@ -182,6 +182,86 @@ $ reproflow run nope
 
 `auth_expired` means the page landed on a URL matching `/login|signin|auth/i` (or showed a password
 field) in a step that did not expect it. Ask the user to run `reproflow login <url>`.
+
+### `reproflow save <name> --from-session [--last <n>] [--description <text>] [--force]`
+
+Saves what you did with `reproflow do` as `.reproflow/flows/<name>.yaml`. It is deterministic: no AI.
+
+- It uses the successful actions since the last `goto` to a new origin (at most 50), or exactly the
+  last `n` with `--last`. Failed actions and screenshots are skipped.
+- Values typed into `fill` steps become params named from the field's label (`Email` becomes
+  `email`, `Quantity` becomes `quantity`); a number input gives a `number` param.
+- **Passwords are never written.** A value typed into a password field becomes a `secret` param
+  that reads `<FLOW>_PASSWORD` from the environment (or the variable you named in an
+  `{{env.NAME}}` template).
+- `base_url` is the first `goto`'s origin and later `goto`s are relative; the hosts visited go into
+  `allowed_hosts`.
+- Each locator is the one the action used, upgraded to role + name when that identifies exactly one
+  element.
+- The flow ends with an `expect_url` for the last page.
+- It refuses to overwrite an existing flow without `--force`.
+
+```console
+$ reproflow save cart --from-session --description "Add two shirts and open the cart"
+{"ok":true,"status":"saved","flow":"cart","path":"/work/shop/.reproflow/flows/cart.yaml","steps":6,"params":["quantity"],"next":"Run it with `reproflow run cart`."}
+```
+
+```yaml
+# Recorded by reproflow from `reproflow do` actions on 2026-11-01.
+# Edit freely, then run:  reproflow run cart
+name: cart
+description: Add two shirts and open the cart
+base_url: http://localhost:3000
+allowed_hosts: [localhost, 127.0.0.1]
+params:
+  quantity: { type: number, default: 2 }
+steps:
+  - goto: /products/TSHIRT-M
+  - fill:
+      target: { role: spinbutton, name: Quantity }
+      value: "{{quantity}}"
+  - click: { role: button, name: Add to cart }
+  - click: { role: link, name: Cart }
+  - wait_for: { role: status, name: Total }
+  - expect_url: /cart
+on_fail: capture
+```
+
+### `reproflow init`
+
+Sets the current project up for agents, and is safe to run again.
+
+```console
+$ reproflow init
+{"ok":true,"status":"initialized","root":"/work/shop","created":[".reproflow/flows/example.yaml",".gitignore",".agents/skills/reproflow/SKILL.md",".claude/skills/reproflow/SKILL.md","AGENTS.md","CLAUDE.md"],"updated":[],"unchanged":[],"next":"Run `reproflow list`. Record your own flow with `reproflow do ...` then `reproflow save <name> --from-session`."}
+```
+
+It creates `.reproflow/flows/` with `example.yaml`, adds `.reproflow/runs/`,
+`.reproflow/session.jsonl` and `.reproflow/stats.jsonl` to `.gitignore`, writes the same
+`SKILL.md` to `.agents/skills/reproflow/` and `.claude/skills/reproflow/`, and puts this note between
+`<!-- reproflow:start -->` and `<!-- reproflow:end -->` in `AGENTS.md` and `CLAUDE.md` (creating them
+if missing, keeping everything else, never duplicating the block):
+
+> Browser checks: use the reproflow CLI. Run `reproflow list` first. Never write Playwright, Selenium
+> or pyautogui scripts for routine browser steps.
+
+`init` rewrites the two `SKILL.md` files and the note block to the current text, so keep your own
+skills under other names. It never overwrites `example.yaml`.
+
+### `reproflow stats [--since <days>] [--tokens-per-step <n>]`
+
+Totals from `.reproflow/stats.jsonl`, where every run and capture appends
+`{ts, flow, status, duration_ms, steps, digest_chars}`.
+
+```console
+$ reproflow stats
+{"ok":true,"runs":12,"passed":9,"failed":3,"errors":0,"pass_rate":0.75,"median_duration_ms":1480,"top_failing_flows":[{"flow":"repro-cart-total","failures":3,"runs":8}],"tokens_avoided_estimate":41610,"tokens_per_step":3800,"estimate_note":"estimate, not a measurement: sum over runs of steps x 3800 - digest chars / 4"}
+```
+
+`tokens_avoided_estimate` is an **estimate**: for each run, `steps x 3,800 - digest characters / 4`
+(never below zero), summed. 3,800 is a rough cost for the screenshot, page dump and reasoning an agent
+spends per browser step; change it with `--tokens-per-step`, `REPROFLOW_TOKENS_PER_STEP` or
+`"tokens_per_step"` in `.reproflow/config.json`.
 
 ## Flow file format
 

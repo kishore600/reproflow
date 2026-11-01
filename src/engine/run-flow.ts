@@ -21,6 +21,7 @@ import type { Flow } from '../flows/schema.js';
 import { stepTypeOf } from '../flows/schema.js';
 import { expandTemplate } from '../flows/templating.js';
 import { toPosix } from '../paths.js';
+import { appendStat, statFromDigest } from '../stats/stats.js';
 import { type Candidate, candidatesFor } from './candidates.js';
 import { isHostAllowed } from './host.js';
 import { resolveElement } from './locators.js';
@@ -327,6 +328,7 @@ export async function runFlow(deps: RunDeps, request: RunRequest): Promise<RunDi
     },
     secrets,
   );
+  await appendStat(project, statFromDigest(digest));
   await session.persistCookies();
   return digest;
 }

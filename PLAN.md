@@ -49,10 +49,10 @@ Decisions that deviate from or interpret the brief live in [DECISIONS.md](DECISI
 
 ## Phase 5 - Recorder, init, stats
 
-- [ ] `save --from-session` (params, secrets, base_url, role+name preference, expect_url)
-- [ ] `init` (flows dir, example, .gitignore, SKILL.md x2, AGENTS.md/CLAUDE.md note)
-- [ ] `stats` + `.reproflow/stats.jsonl`
-- [ ] Integration: saved flow passes
+- [x] `save --from-session` (params, secrets, base_url, role+name preference, expect_url)
+- [x] `init` (flows dir, example, .gitignore, SKILL.md x2, AGENTS.md/CLAUDE.md note)
+- [x] `stats` + `.reproflow/stats.jsonl`
+- [x] Integration: saved flow passes
 
 ## Phase 6 - Plugin, doctor, docs, CI
 

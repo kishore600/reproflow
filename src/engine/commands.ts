@@ -3,6 +3,7 @@ import { ReproflowError } from '../errors.js';
 import { buildDigest, type RunDigest } from '../evidence/digest.js';
 import { type LoadedFlow, loadFlow } from '../flows/load.js';
 import { resolveEnv, resolveParams } from '../flows/params.js';
+import { appendStat, statFromDigest } from '../stats/stats.js';
 import type { RunRequest } from './run-flow.js';
 
 export interface RunFlowOptions {
@@ -58,6 +59,8 @@ export async function runFlowCommand(
     return await handle.call<RunDigest>('run', request);
   } catch (error) {
     if (!(error instanceof ReproflowError)) throw error;
-    return errorDigest(name, error, loaded?.flow.steps.length ?? 0, Date.now() - started);
+    const digest = errorDigest(name, error, loaded?.flow.steps.length ?? 0, Date.now() - started);
+    if (error.code !== 'flow_not_found') await appendStat(root, statFromDigest(digest));
+    return digest;
   }
 }

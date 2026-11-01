@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /** Global state folder. `REPROFLOW_HOME` overrides it (tests and the demo use a temp folder). */
 export function reproflowHome(): string {
@@ -75,3 +76,20 @@ export function projectPaths(root: string): ProjectPaths {
 
 /** Paths in digests use forward slashes on every platform so JSON stays short and portable. */
 export const toPosix = (p: string): string => p.replaceAll('\\', '/');
+
+/** The installed reproflow package folder (holds examples/, schema/, plugin/). */
+export function packageRoot(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (;;) {
+    const manifest = join(dir, 'package.json');
+    if (existsSync(manifest)) {
+      try {
+        if ((JSON.parse(readFileSync(manifest, 'utf8')) as { name?: string }).name === 'reproflow')
+          return dir;
+      } catch {}
+    }
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error('cannot locate the reproflow package folder');
+    dir = parent;
+  }
+}

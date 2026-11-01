@@ -11,6 +11,7 @@ import { MASK, maskDeep } from '../evidence/mask.js';
 import type { LocatorSpec } from '../flows/schema.js';
 import { appendSessionEntry, type ElementMeta } from '../flows/session-log.js';
 import { toPosix } from '../paths.js';
+import { appendStat, statFromDigest } from '../stats/stats.js';
 import type { BrowserSession } from './browser.js';
 import type { CaptureParams, DaemonInfo, DaemonStatus, DoParams, MiniDigest } from './protocol.js';
 
@@ -87,6 +88,7 @@ async function handleDo(deps: HandlerDeps, params: DoParams): Promise<MiniDigest
   }
 
   let value: string | null = params.logValue ?? null;
+  if (step.type === 'wait_for') value = step.state;
   if (step.type === 'fill') {
     if (el?.type === 'password') deps.secrets.add(step.value);
     value = params.logValue ?? (el?.type === 'password' ? MASK : step.value);
@@ -215,7 +217,8 @@ async function handleCapture(deps: HandlerDeps, params: CaptureParams) {
     },
     secrets,
   );
-  return maskDeep(digest, secrets);
+  await appendStat(project, statFromDigest(digest));
+  return digest;
 }
 
 export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
