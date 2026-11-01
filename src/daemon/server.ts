@@ -85,10 +85,12 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
     process.exit(0);
   }
 
+  const secrets = new Set<string>();
   const handlers = createHandlers({
     session,
     project,
     info,
+    secrets,
     shutdown: () => void shutdown('requested'),
   });
 

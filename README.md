@@ -10,7 +10,7 @@ the repo, and replay that flow later with zero AI calls. Every command prints a 
 (at most 2,000 characters) with paths to screenshots and logs on disk.
 
 > Status: under construction. This README grows with each build phase; see [PLAN.md](PLAN.md).
-> Documented so far: sessions, login and the `do` actions.
+> Documented so far: sessions, login, the `do` actions, `capture` and the digest.
 
 ## Concepts
 
@@ -111,6 +111,51 @@ template, not the secret. A value typed into a password field is masked even wit
 
 **Windows + Git Bash** rewrites arguments that start with `/` (`do goto /cart` becomes
 `C:/Program Files/Git/cart`). Use a full URL, or run with `MSYS_NO_PATHCONV=1`.
+
+### `reproflow capture [--full-page] [--locator <locator>]`
+
+Writes an evidence bundle for the current tab and prints the digest. Run it right after reproducing
+a bug: the daemon keeps the last 200 console, page-error and network events of each tab, so the error
+that broke the page is in the bundle even if it happened a few actions ago.
+
+```console
+$ reproflow capture
+{"ok":true,"status":"passed","flow":null,"params":{},"duration_ms":412,"steps_total":0,"steps_passed":0,"failed_step":null,"error":null,"evidence":{"dir":"/proj/.reproflow/runs/20261101-120301-capture","screenshot":"/proj/.reproflow/runs/20261101-120301-capture/screenshot.png","snapshot":"/proj/.reproflow/runs/20261101-120301-capture/snapshot.aria.yml","url":"http://localhost:3000/cart","title":"Cart - Shop","console_errors":["TypeError: price is undefined"],"page_errors":[],"failed_requests":["GET /api/cart -> 500"]},"next":"Open the screenshot or snapshot only if this digest is not enough.","truncated":false}
+```
+
+`--locator` also writes `element.png`, cropped to that element. If it matches nothing, the digest has
+`status: "failed"`, `error.code: "locator_not_found"` and up to 3 ranked `candidates` (exit code 1).
+
+## The digest
+
+Every command that runs browser steps prints one JSON object of at most 2,000 characters:
+
+| Field                                        | Meaning                                                                                                                                                               |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`, `status`                               | `passed`, `failed` (a check or step failed) or `error` (setup problem)                                                                                                |
+| `flow`, `params`                             | flow name (`null` for `capture`) and the params used; secrets are `"***"`                                                                                             |
+| `duration_ms`, `steps_total`, `steps_passed` |                                                                                                                                                                       |
+| `failed_step`                                | `{n, type, target, expected, actual}` or `null`                                                                                                                       |
+| `error`                                      | `{code, message, hint}` or `null`                                                                                                                                     |
+| `candidates`                                 | up to 3 `{locator, role, name, score}`, only for `locator_not_found`                                                                                                  |
+| `evidence`                                   | `{dir, screenshot, snapshot, url, title, console_errors, page_errors, failed_requests}`; lists hold at most 5 entries, `failed_requests` read `METHOD path -> status` |
+| `next`                                       | one sentence on what to do next                                                                                                                                       |
+| `truncated`                                  | `true` if the 2,000-character limit forced anything to be cut                                                                                                         |
+
+When a digest is too long, each list entry is cut to 300 characters, then entries are dropped, then
+strings are shortened. The complete result is always in `run.json` in the run folder.
+
+**Error codes:** `locator_not_found`, `assertion_failed`, `navigation_timeout`, `auth_expired`,
+`host_not_allowed`, `browser_unavailable`, `daemon_unavailable`, `flow_invalid`, `param_missing`,
+`flow_not_found`.
+
+**Evidence folder** `.reproflow/runs/<YYYYMMDD-HHmmss>-<name>/`: `screenshot.png` (viewport),
+`element.png` (a failed or requested element), `snapshot.aria.yml`, `console.jsonl`,
+`page-errors.jsonl`, `network.jsonl` (failed requests and responses with status >= 400) and `run.json`.
+Only the newest 50 run folders are kept.
+
+Secrets are masked in digests, logs, snapshots and `run.json`. **Screenshots cannot be masked**, so
+do not run flows that display a secret on screen if the evidence folder leaves your machine.
 
 ## Development
 

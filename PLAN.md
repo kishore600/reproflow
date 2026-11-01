@@ -30,11 +30,11 @@ Decisions that deviate from or interpret the brief live in [DECISIONS.md](DECISI
 ## Phase 3 - Evidence, capture, digest
 
 - [x] Per-page collectors (console error/warning, pageerror, requestfailed, status >= 400), ring of 200 (landed in phase 2)
-- [ ] Evidence bundle writer + run folders + keep last 50
-- [ ] Digest builder, 2,000-character truncation, text renderer
-- [ ] `capture [--full-page] [--locator]`
-- [ ] Secret masking
-- [ ] Unit tests: truncation, masking; integration: capture writes every file
+- [x] Evidence bundle writer + run folders + keep last 50
+- [x] Digest builder, 2,000-character truncation, text renderer
+- [x] `capture [--full-page] [--locator]`
+- [x] Secret masking
+- [x] Unit tests: truncation, masking; integration: capture writes every file
 
 ## Phase 4 - Flows and `run`
 

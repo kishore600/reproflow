@@ -74,3 +74,30 @@ Choices made where the brief was silent or ambiguous. Newest sections at the bot
   doubled backslashes in JSON).
 - **Git Bash on Windows rewrites arguments that start with `/`** (`do goto /cart` becomes
   `C:/Program Files/Git/cart`). Use `MSYS_NO_PATHCONV=1` or a full URL there; documented in the README.
+
+## Evidence and digests (phase 3)
+
+- **Digest lists show the earliest 5 unique entries**, not the latest: the first error on a page is
+  usually the cause, later ones its fallout. The full, uncapped lists are in `run.json`.
+- **Noise stays out of the digest, in the files.** Favicon misses, `ERR_ABORTED` requests (a page
+  navigating away from an in-flight fetch) and Chromium's own "Failed to load resource" console line
+  (it repeats the failed request) are left out of `console_errors` / `failed_requests`, but they
+  stay in `console.jsonl` and `network.jsonl`.
+- **Same-origin requests print as `GET /api/cart -> 500`** (path and query, no origin). Other origins
+  keep the full URL.
+- **Truncation order** (applies to every digest, including `do`): cut each list entry to 300
+  characters; then drop entries from whichever list is longest; then shorten strings (file paths are
+  never shortened); then fall back to `{ok, status, error, evidence.dir, truncated}`. It is
+  property-tested to never exceed 2,000 characters. `run.json` always keeps everything.
+- **A failed `do` action gets the same evidence as a failed run** (bundle, `element.png` when its
+  locator resolves, ranked candidates), in a `<ts>-do-<action>` run folder. Passing `do` actions
+  write nothing, which keeps the session fast.
+- **Capture scope.** `capture` writes the active tab's whole 200-event ring buffer: the error that
+  broke the page is usually from an earlier action, not from the capture itself.
+- **Locator candidates** come from the page's aria snapshot. Score = 0.7 x name similarity + 0.3 x
+  role match for role locators, name similarity alone for label/text/placeholder/testid locators
+  (similarity is 1 - Levenshtein / longest, floored at 0.75 when one name contains the other).
+  Scores under 0.3 are dropped; the top 3 are kept. CSS locators get none (they carry no text).
+- **Secrets are tracked per daemon**, not per command: any value typed into a password field or given
+  as an `{{env.X}}` template is masked in every digest, log, snapshot and `run.json` the daemon
+  writes afterwards. Screenshots cannot be masked; that limitation is in the README.

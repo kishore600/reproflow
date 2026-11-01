@@ -1,5 +1,8 @@
+import type { Candidate } from '../engine/candidates.js';
 import type { NormalizedStep } from '../engine/steps.js';
 import type { ErrorInfo } from '../errors.js';
+import type { EvidenceSummary } from '../evidence/digest.js';
+import type { LocatorSpec } from '../flows/schema.js';
 
 export interface PageInfo {
   index: number;
@@ -36,5 +39,15 @@ export interface MiniDigest {
   url: string;
   title: string;
   error?: ErrorInfo;
-  evidence?: Record<string, unknown>;
+  /** Only for locator_not_found. */
+  candidates?: Candidate[];
+  /** A bundle summary for failures, or just the file for `screenshot`. */
+  evidence?: EvidenceSummary | { screenshot: string };
+  truncated?: boolean;
+}
+
+export interface CaptureParams {
+  fullPage?: boolean;
+  /** Also crop element.png to this element. */
+  locator?: LocatorSpec;
 }

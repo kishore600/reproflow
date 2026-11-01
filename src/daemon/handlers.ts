@@ -1,20 +1,24 @@
 import { join } from 'node:path';
-import type { Page } from 'playwright';
-import { toPlaywright } from '../engine/locators.js';
+import type { Locator, Page } from 'playwright';
+import { type Candidate, candidatesFor } from '../engine/candidates.js';
+import { formatLocator, toPlaywright } from '../engine/locators.js';
 import { describeStep, executeStep, type NormalizedStep, StepFailure } from '../engine/steps.js';
-import { errorMessage } from '../errors.js';
-import { createRunDir } from '../evidence/bundle.js';
+import { errorMessage, ReproflowError } from '../errors.js';
+import { createRunDir, writeBundle, writeRunJson } from '../evidence/bundle.js';
+import { buildDigest, fitDigest } from '../evidence/digest.js';
 import { MASK, maskDeep } from '../evidence/mask.js';
 import type { LocatorSpec } from '../flows/schema.js';
 import { appendSessionEntry, type ElementMeta } from '../flows/session-log.js';
 import { toPosix } from '../paths.js';
 import type { BrowserSession } from './browser.js';
-import type { DaemonInfo, DaemonStatus, DoParams, MiniDigest } from './protocol.js';
+import type { CaptureParams, DaemonInfo, DaemonStatus, DoParams, MiniDigest } from './protocol.js';
 
 export interface HandlerDeps {
   session: BrowserSession;
   project: string;
   info: DaemonInfo;
+  /** Secret values seen so far (password fields, env templates); masked in everything written. */
+  secrets: Set<string>;
   shutdown(): void;
 }
 
@@ -24,6 +28,12 @@ export type Handler = (params: unknown) => Promise<unknown>;
 export const SERIAL_METHODS = new Set(['do', 'capture', 'run']);
 
 const ARIA_LINE = /^-\s+([\w-]+)(?:\s+"((?:[^"\\]|\\.)*)")?/;
+
+/** The first element a locator matches, or undefined when there is none. */
+export async function resolveElement(page: Page, spec: LocatorSpec): Promise<Locator | undefined> {
+  const locator = toPlaywright(page, spec);
+  return (await locator.count().catch(() => 0)) > 0 ? locator.first() : undefined;
+}
 
 /** Role, accessible name, label and input type of the element a click/fill is about to use. */
 export async function describeElement(
@@ -72,26 +82,27 @@ export async function describeElement(
 async function handleDo(deps: HandlerDeps, params: DoParams): Promise<MiniDigest> {
   const { session, project } = deps;
   const { action } = params;
-  const secrets = [...(params.secrets ?? [])];
+  for (const secret of params.secrets ?? []) deps.secrets.add(secret);
   let step: NormalizedStep = params.step;
   await session.ensurePage();
 
   let el: ElementMeta | undefined;
-  if (step.type === 'click' || step.type === 'fill')
+  if (step.type === 'click' || step.type === 'fill') {
     el = await describeElement(session.page, step.target);
+  }
 
   let value: string | null = params.logValue ?? null;
   if (step.type === 'fill') {
-    if (el?.type === 'password') secrets.push(step.value);
+    if (el?.type === 'password') deps.secrets.add(step.value);
     value = params.logValue ?? (el?.type === 'password' ? MASK : step.value);
   }
 
-  let evidence: Record<string, unknown> | undefined;
   if (step.type === 'screenshot' && !step.path) {
     const dir = await createRunDir(project, 'do-screenshot');
     step = { ...step, path: join(dir, step.target ? 'element.png' : 'screenshot.png') };
   }
 
+  let evidence: MiniDigest['evidence'];
   let failure: StepFailure | undefined;
   try {
     const output = await executeStep(step, { session });
@@ -104,12 +115,44 @@ async function handleDo(deps: HandlerDeps, params: DoParams): Promise<MiniDigest
   }
 
   const page = session.page;
+  const secrets = [...deps.secrets];
+  let candidates: Candidate[] | undefined;
+  if (failure && failure.code !== 'browser_unavailable') {
+    const dir = await createRunDir(project, `do-${action}`);
+    const element = failure.locator ? await resolveElement(page, failure.locator) : undefined;
+    const bundle = await writeBundle({
+      page,
+      dir,
+      events: session.watcher(page)?.events ?? [],
+      secrets,
+      element,
+    });
+    evidence = bundle.summary;
+    if (failure.code === 'locator_not_found' && failure.locator) {
+      candidates = await candidatesFor(page, failure.locator);
+    }
+    await writeRunJson(
+      dir,
+      {
+        kind: 'do',
+        action,
+        ok: false,
+        target: describeStep(step),
+        error: failure.toInfo(),
+        candidates,
+        evidence: { ...bundle.summary, ...bundle.full },
+      },
+      secrets,
+    );
+  }
+
   const digest: MiniDigest = {
     ok: !failure,
     action,
     url: page.url(),
     title: await page.title().catch(() => ''),
     ...(failure ? { error: failure.toInfo() } : {}),
+    ...(candidates?.length ? { candidates } : {}),
     ...(evidence ? { evidence } : {}),
   };
 
@@ -123,6 +166,60 @@ async function handleDo(deps: HandlerDeps, params: DoParams): Promise<MiniDigest
     ...(el ? { el } : {}),
   });
   await session.persistCookies();
+  return fitDigest(maskDeep(digest, secrets));
+}
+
+async function handleCapture(deps: HandlerDeps, params: CaptureParams) {
+  const started = Date.now();
+  const { session, project } = deps;
+  await session.ensurePage();
+  const page = session.page;
+  const secrets = [...deps.secrets];
+  const dir = await createRunDir(project, 'capture');
+
+  let element: Locator | undefined;
+  let error: ReproflowError | null = null;
+  let candidates: Candidate[] | undefined;
+  if (params.locator) {
+    element = await resolveElement(page, params.locator);
+    if (!element) {
+      error = new ReproflowError(
+        'locator_not_found',
+        `No element found for ${formatLocator(params.locator)}`,
+      );
+      candidates = await candidatesFor(page, params.locator);
+    }
+  }
+
+  const bundle = await writeBundle({
+    page,
+    dir,
+    events: session.watcher(page)?.events ?? [],
+    secrets,
+    fullPage: params.fullPage,
+    element,
+  });
+  const digest = buildDigest({
+    flow: null,
+    status: error ? 'failed' : 'passed',
+    durationMs: Date.now() - started,
+    stepsTotal: 0,
+    stepsPassed: 0,
+    error: error?.toInfo() ?? null,
+    candidates,
+    evidence: bundle.summary,
+  });
+  await writeRunJson(
+    dir,
+    {
+      kind: 'capture',
+      ts: new Date(started).toISOString(),
+      locator: params.locator ? formatLocator(params.locator) : null,
+      digest,
+      evidence: { ...bundle.summary, ...bundle.full, element: bundle.elementPath },
+    },
+    secrets,
+  );
   return maskDeep(digest, secrets);
 }
 
@@ -146,5 +243,6 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       return { ok: true };
     },
     do: (params) => handleDo(deps, params as DoParams),
+    capture: (params) => handleCapture(deps, params as CaptureParams),
   };
 }
