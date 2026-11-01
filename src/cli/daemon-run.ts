@@ -1,13 +1,23 @@
 import type { Command } from 'commander';
-import { runCommand } from './output.js';
-import { notImplemented } from './stub.js';
+import { runDaemon } from '../daemon/server.js';
+import { fail } from './output.js';
 
 /** Hidden entry point the CLI spawns, detached, to host the browser daemon. */
 export function registerDaemonRun(program: Command): void {
   program
     .command('daemon-run', { hidden: true })
-    .option('--project <root>')
-    .option('--profile <name>')
+    .requiredOption('--project <root>')
+    .option('--profile <name>', 'browser profile', 'default')
     .option('--headed')
-    .action(() => runCommand(async () => notImplemented('daemon-run', 2)));
+    .action(async (opts: { project: string; profile: string; headed?: boolean }) => {
+      try {
+        await runDaemon({
+          project: opts.project,
+          profile: opts.profile,
+          headed: Boolean(opts.headed),
+        });
+      } catch (error) {
+        process.exitCode = fail(error instanceof Error ? error.message : String(error));
+      }
+    });
 }

@@ -15,21 +15,21 @@ Decisions that deviate from or interpret the brief live in [DECISIONS.md](DECISI
 - [x] PLAN.md, DECISIONS.md, LICENSE, README stub
 - [x] typecheck, lint, test green; commit `phase 1`
 
-## Phase 2 - Daemon, profiles, session, login, `do`
+## Phase 2 - Daemon, profiles, session, login, `do` (also: collectors, step engine, flow step schema)
 
-- [ ] Project root + `~/.reproflow` paths (`REPROFLOW_HOME` override)
-- [ ] Daemon: 127.0.0.1 random port, bearer token, 0600 state file, JSON-RPC `POST /rpc`
-- [ ] Persistent Chromium context per profile, 1280x800, headless by default
-- [ ] Idle shutdown (30 min), stale state cleanup, `session start|stop|status`
-- [ ] Daemon client: auto-start, restart on profile/headed change
-- [ ] `login <url>` (headed, wait for Enter)
-- [ ] Locator shorthand parser + Playwright mapping
-- [ ] All `do` actions + `.reproflow/session.jsonl`
-- [ ] Unit tests: locator parsing; integration: daemon lifecycle, `do` actions, switch-tab
+- [x] Project root + `~/.reproflow` paths (`REPROFLOW_HOME` override)
+- [x] Daemon: 127.0.0.1 random port, bearer token, 0600 state file, JSON-RPC `POST /rpc`
+- [x] Persistent Chromium context per profile, 1280x800, headless by default
+- [x] Idle shutdown (30 min), stale state cleanup, `session start|stop|status`
+- [x] Daemon client: auto-start, restart on profile/headed change
+- [x] `login <url>` (headed, wait for Enter)
+- [x] Locator shorthand parser + Playwright mapping
+- [x] All `do` actions + `.reproflow/session.jsonl`
+- [x] Unit tests: locator parsing; integration: daemon lifecycle, `do` actions, switch-tab
 
 ## Phase 3 - Evidence, capture, digest
 
-- [ ] Per-page collectors (console error/warning, pageerror, requestfailed, status >= 400), ring of 200
+- [x] Per-page collectors (console error/warning, pageerror, requestfailed, status >= 400), ring of 200 (landed in phase 2)
 - [ ] Evidence bundle writer + run folders + keep last 50
 - [ ] Digest builder, 2,000-character truncation, text renderer
 - [ ] `capture [--full-page] [--locator]`
@@ -38,7 +38,8 @@ Decisions that deviate from or interpret the brief live in [DECISIONS.md](DECISI
 
 ## Phase 4 - Flows and `run`
 
-- [ ] Zod flow schema, JSON Schema export to `schema/flow.schema.json`
+- [x] Zod flow schema (landed in phase 2 with the step engine)
+- [ ] JSON Schema export to `schema/flow.schema.json`
 - [ ] Loader with YAML paths, templating, param resolution
 - [ ] `list`, `describe`
 - [ ] Step executor, host allowlist, auth_expired detection, error codes
