@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+.DS_Store
+
+# reproflow's own working state (this repo dogfoods the CLI)
+.reproflow/runs/
+.reproflow/session.jsonl
+.reproflow/stats.jsonl
