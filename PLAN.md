@@ -56,12 +56,12 @@ Decisions that deviate from or interpret the brief live in [DECISIONS.md](DECISI
 
 ## Phase 6 - Plugin, doctor, docs, CI
 
-- [ ] Claude Code plugin + PreToolUse hook + root marketplace file (read the official docs first)
-- [ ] `doctor [--fix]`
-- [ ] README: 60-second quickstart + full command reference
-- [ ] `.github/workflows/ci.yml` (ubuntu, macos, windows; Node 22)
-- [ ] `npm pack --dry-run` check
-- [ ] `npm run demo`
+- [x] Claude Code plugin + PreToolUse hook + root marketplace file (read the official docs first)
+- [x] `doctor [--fix]`
+- [x] README: 60-second quickstart + full command reference
+- [x] `.github/workflows/ci.yml` (ubuntu, macos, windows; Node 22)
+- [x] `npm pack --dry-run` check
+- [x] `npm run demo`
 
 ## Phase 7 - MCP (only if 1-6 fully green)
 

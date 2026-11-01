@@ -161,3 +161,37 @@ Choices made where the brief was silent or ambiguous. Newest sections at the bot
   browser (invalid flow, missing param) logs `steps: 0`, so it avoids no tokens. `flow_not_found` is
   not logged because there is no flow to attribute it to. Top failing flows rank by failures, then by
   failure rate, then by name.
+
+## Plugin, doctor, CI and demo (phase 6)
+
+- **Plugin layout follows the current docs** (read before writing, and checked with
+  `claude plugin validate`): the marketplace file is `.claude-plugin/marketplace.json` at the
+  repository root and lists one plugin with `"source": "./plugin"`; the plugin root is `plugin/`
+  (`.claude-plugin/plugin.json`, `skills/reproflow/SKILL.md`, `hooks/hooks.json`,
+  `scripts/warn-browser-scripts.mjs`). Marketplace, plugin and entry are all named `reproflow`
+  (the entry and manifest names must match). Install id: `reproflow@reproflow`.
+- **The hook is exec-form** (`"command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/..."]`),
+  so paths with spaces need no quoting and Windows needs no shell. Node is a given: reproflow itself
+  needs it. The hook prints `systemMessage` (for the user) and `additionalContext` (for Claude),
+  never a `permissionDecision`, and always exits 0, even on malformed input.
+- **What the hook calls "a new script"**: git does not track the file, or, outside git, it was written
+  in the last 15 minutes. Inline code (`python -c`, `node -e`, heredocs) is checked in the command
+  text itself. The plugin skill is byte-identical to `reproflow init`'s (a test checks it).
+- **The plugin does not install the CLI** (a plugin cannot run `npm install -g` safely); the README
+  and the plugin description say the CLI must be on `PATH`. No `repository`/`homepage` is set in
+  the manifests because the repository has no public URL yet; the README uses `<owner>/reproflow`.
+- **`doctor --fix` runs the Playwright CLI bundled with reproflow** (`node .../playwright/cli.js
+  install chromium`) instead of `npx playwright install chromium`: same command, but `npx` from a
+  different directory can resolve another Playwright version and download a browser revision
+  reproflow cannot use. It falls back to `npx` if the bundled CLI is missing. Installer output goes
+  to stderr so stdout stays a clean digest. A configured `REPROFLOW_BROWSER_CHANNEL` skips the
+  Chromium check.
+- **`doctor` is a check, so a failure exits 1**, not 2.
+- **CI** installs Chromium with `npx playwright install --with-deps chromium` (the flag installs Linux
+  libraries and does nothing on macOS and Windows), then build, typecheck, lint, tests and
+  `npm pack --dry-run`. `npm run build` runs in `prepack` so a published package always has a fresh
+  `dist/`. A test runs `npm pack --dry-run --json` and checks the file list.
+- **The demo adds the assertion itself.** The recorder pins the URL but cannot know which total
+  matters, so `npm run demo` edits the saved YAML to add the `expect_text` step, as an agent or a
+  person would. It exits non-zero if the failing digest is over 2,000 characters or misses the console
+  error or the 500, so it works as a smoke test.

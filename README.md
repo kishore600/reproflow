@@ -9,8 +9,72 @@ login. It can capture debug evidence in one call, save a sequence of steps as a 
 the repo, and replay that flow later with zero AI calls. Every command prints a compact JSON digest
 (at most 2,000 characters) with paths to screenshots and logs on disk.
 
-> Status: under construction. This README grows with each build phase; see [PLAN.md](PLAN.md).
-> Documented so far: every command except `doctor` and `mcp`, the flow file format and the digest.
+## 60-second quickstart
+
+```bash
+npm install -g reproflow          # Node.js 22 or newer
+reproflow doctor --fix            # checks everything; installs Playwright Chromium if it is missing
+
+cd your-web-project
+reproflow init                    # flows folder, agent skill, AGENTS.md / CLAUDE.md note
+reproflow login http://localhost:3000/login   # once, only if the app needs a login
+
+reproflow do goto http://localhost:3000/products/TSHIRT-M
+reproflow do click 'role=button[name="Add to cart"]'
+reproflow capture                 # one call: screenshot, aria snapshot, console, network
+reproflow save repro-cart-total --from-session
+reproflow run repro-cart-total    # replay: no AI, one JSON digest
+```
+
+Want to see it work before pointing it at your app? From a clone of this repository:
+
+```bash
+npm install && npx playwright install chromium
+npm run demo
+```
+
+The demo starts a small shop app with a bug, records and saves a flow, runs it (it fails, and the
+digest names the console error and the `GET /api/cart -> 500`), fixes the bug and runs the same flow
+again (it passes). Everything happens in a temp folder.
+
+## Install
+
+1. **The CLI**: `npm install -g reproflow`, or run it from a project with `npx reproflow`. It needs
+   Node.js 22 or newer.
+2. **A browser**: `reproflow doctor --fix` downloads Playwright's Chromium (about 200 MB). Where that
+   download is blocked, set `REPROFLOW_BROWSER_CHANNEL=chrome` (or `msedge`) to drive a browser you
+   already have installed.
+3. **Tell your agent about it**, either or both:
+
+**Claude Code plugin.** The repository is a plugin marketplace
+([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) holding one plugin in
+[`plugin/`](plugin). In Claude Code:
+
+```text
+/plugin marketplace add <owner>/reproflow
+/plugin install reproflow@reproflow
+```
+
+or from your shell, which also works for a local checkout:
+
+```bash
+claude plugin marketplace add <owner>/reproflow      # or ./path/to/reproflow
+claude plugin install reproflow@reproflow
+```
+
+(Replace `<owner>/reproflow` with the GitHub path of the repository.) The plugin adds:
+
+- the **reproflow skill**, the same text `reproflow init` writes (it needs the CLI on `PATH`);
+- a **PreToolUse hook on Bash** that _warns, and never blocks_, when a command installs Playwright,
+  Selenium or pyautogui (`npm i playwright`, `pip install selenium`, `npx playwright install` ...),
+  or runs a new script (not tracked by git) or inline code that imports them. The warning names the
+  matching reproflow command, for example `reproflow list` / `reproflow run <flow>` for a Playwright
+  script, or `reproflow do click 'role=button[name="..."]'` for pyautogui. Try it without installing:
+  `claude --plugin-dir ./plugin`.
+
+**Any agent, through the repository.** `reproflow init` writes the skill to
+`.agents/skills/reproflow/SKILL.md` and `.claude/skills/reproflow/SKILL.md` and a one-line note to
+`AGENTS.md` and `CLAUDE.md`, which agents that follow those conventions read on startup.
 
 ## Concepts
 
@@ -28,7 +92,36 @@ the repo, and replay that flow later with zero AI calls. Every command prints a 
 Output is JSON when stdout is not a TTY (which is what an agent sees) or when `--json` is passed, and
 readable text otherwise.
 
-## Command reference (so far)
+## Command reference
+
+| Command                      | What it does                                 |
+| ---------------------------- | -------------------------------------------- |
+| `init`                       | set the project up for agents (idempotent)   |
+| `doctor [--fix]`             | check Node, Chromium, daemon and permissions |
+| `session start               | stop                                         | status` | manage the browser daemon |
+| `login <url>`                | sign in by hand; the profile keeps it        |
+| `do <action>`                | run one action and log it                    |
+| `capture`                    | one-call debug evidence                      |
+| `list`, `describe <flow>`    | what flows exist                             |
+| `run <flow>`                 | replay a flow with no AI                     |
+| `save <name> --from-session` | record a flow from the session               |
+| `stats`                      | totals and estimated tokens avoided          |
+
+Every command prints JSON when stdout is not a TTY or `--json` is passed, and readable text
+otherwise. Exit codes: `0` success or passed, `1` a check failed, `2` usage, setup or browser error.
+
+### `reproflow doctor [--fix]`
+
+Prints a pass/fail list: the Node version, the Playwright package, Playwright Chromium (or the browser
+channel you set), the project's daemon, and write access to `.reproflow/` and `~/.reproflow/`.
+`--fix` downloads Chromium when it is missing (it runs the Playwright CLI bundled with reproflow, the
+equivalent of `npx playwright install chromium`, so the browser revision always matches) and stops a
+stuck daemon. Exit code `1` if any check fails.
+
+```console
+$ reproflow doctor
+{"ok":true,"status":"passed","checks":[{"name":"node","ok":true,"detail":"Node.js 22.17.1"},{"name":"playwright","ok":true,"detail":"playwright 1.64.1"},{"name":"chromium","ok":true,"detail":"Chromium at C:/Users/me/AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe"},{"name":"daemon","ok":true,"detail":"not running (one starts when a command needs a browser)"},{"name":"write: project","ok":true,"detail":"can write to /work/shop/.reproflow"},{"name":"write: home","ok":true,"detail":"can write to /home/me/.reproflow/daemons"}],"fixed":[]}
+```
 
 ### `reproflow session start|stop|status [--headed] [--profile <name>]`
 
@@ -36,6 +129,7 @@ readable text otherwise.
 $ reproflow session start
 {"ok":true,"status":"running","pid":14816,"profile":"default","headed":false,"started_at":"2026-11-01T06:39:23.734Z","tabs":[{"index":0,"url":"about:blank","active":true}]}
 $ reproflow session status
+{"ok":true,"status":"running","pid":14816,"profile":"default","headed":false,"started_at":"2026-11-01T06:39:23.734Z","tabs":[{"index":0,"url":"http://localhost:3000/cart","active":true}]}
 $ reproflow session stop
 {"ok":true,"status":"stopped","was_running":true}
 ```
@@ -349,15 +443,55 @@ Only the newest 50 run folders are kept.
 Secrets are masked in digests, logs, snapshots and `run.json`. **Screenshots cannot be masked**, so
 do not run flows that display a secret on screen if the evidence folder leaves your machine.
 
+## Security
+
+- The daemon listens on `127.0.0.1` only, on a random port, and answers only requests that carry its
+  random 32-byte bearer token. The token lives in `~/.reproflow/daemons/<sha1 of project root>.json`,
+  created with mode `0600` (best effort on Windows), and is never printed.
+- Secret values are never printed or stored: not in digests, `session.jsonl`, `run.json`, the
+  `.jsonl` logs or the aria snapshot. That covers secret params, `{{env.NAME}}` values and anything
+  typed into a password field. Screenshots cannot be masked.
+- A flow may only navigate to `localhost`, `127.0.0.1` and its `allowed_hosts`.
+- reproflow makes no network calls of its own: only the pages you test, and the Playwright browser
+  download that `reproflow doctor --fix` starts. There is no telemetry and no AI call inside it.
+- Your browser profile (`~/.reproflow/profiles/<name>/`) holds your logins, like any browser profile.
+  Session cookies are also kept in `reproflow-cookies.json` inside it (mode `0600`) so a login
+  survives the daemon restarting.
+
+## Troubleshooting
+
+| Symptom                                             | Fix                                                                                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `browser_unavailable`: Chromium is not installed    | `reproflow doctor --fix`                                                                                                     |
+| `browser_unavailable`: the profile is in use        | another project's session holds it: `reproflow session stop` there, or use `--profile <name>`                                |
+| `daemon_unavailable`                                | `reproflow session stop`, then retry; `reproflow doctor --fix` clears a stuck daemon                                         |
+| `auth_expired`                                      | `reproflow login <url>`                                                                                                      |
+| `host_not_allowed`                                  | add the host to the flow's `allowed_hosts` if the navigation is intended                                                     |
+| `do goto /cart` becomes `C:/Program Files/Git/cart` | Git Bash rewrites leading `/`: use a full URL or `MSYS_NO_PATHCONV=1`                                                        |
+| a flow passes locally and fails in CI               | CI has a fresh profile: sign in there first (`login`, or a flow that signs in with a secret param read from the environment) |
+
+Run state lives in `.reproflow/` (flows are meant to be committed; `runs/`, `session.jsonl` and
+`stats.jsonl` are git-ignored by `init`) and in `~/.reproflow/` (daemons and browser profiles;
+`REPROFLOW_HOME` moves it).
+
 ## Development
 
 ```bash
 npm install
 npx playwright install chromium
-npm run build
+npm run build        # bundles the CLI and regenerates schema/flow.schema.json
 npm run typecheck && npm run lint && npm test
+npm run demo         # the end-to-end walkthrough from the quickstart
 ```
 
-Requires Node.js >= 22. Where the Playwright browser download is blocked, set
-`REPROFLOW_BROWSER_CHANNEL=chrome` (or `msedge`) to drive an installed browser instead; the tests
-honour it too.
+Requires Node.js >= 22. The integration tests drive the built CLI against `test/fixtures/shop-app`
+with a headless Chromium. Where the Playwright browser download is blocked, set
+`REPROFLOW_BROWSER_CHANNEL=chrome` (or `msedge`) and the tests use that browser instead.
+
+CI (`.github/workflows/ci.yml`) runs build, typecheck, lint and the tests on Ubuntu, macOS and
+Windows with Node 22, then `npm pack --dry-run`. Design choices are in [DECISIONS.md](DECISIONS.md) and
+the build log in [PLAN.md](PLAN.md).
+
+## License
+
+MIT

@@ -1,0 +1,10 @@
+{
+  "name": "reproflow",
+  "version": "0.1.0",
+  "description": "Saved, replayable browser flows and one-call debug evidence. Teaches Claude to use the reproflow CLI instead of writing throwaway Playwright, Selenium or pyautogui scripts.",
+  "author": {
+    "name": "reproflow contributors"
+  },
+  "license": "MIT",
+  "keywords": ["browser", "playwright", "debugging", "e2e", "flows"]
+}

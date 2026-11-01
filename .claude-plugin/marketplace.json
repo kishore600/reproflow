@@ -1,0 +1,16 @@
+{
+  "name": "reproflow",
+  "description": "reproflow: saved browser flows and one-call debug evidence for AI coding agents",
+  "owner": {
+    "name": "reproflow contributors"
+  },
+  "plugins": [
+    {
+      "name": "reproflow",
+      "source": "./plugin",
+      "description": "Teaches Claude to use the reproflow CLI (saved browser flows, one-call debug evidence) instead of throwaway Playwright, Selenium or pyautogui scripts. Needs the reproflow CLI on PATH.",
+      "category": "testing",
+      "tags": ["browser", "playwright", "debugging", "e2e"]
+    }
+  ]
+}

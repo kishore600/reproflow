@@ -36,7 +36,8 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
-    "demo": "npm run build && node scripts/demo.mjs"
+    "demo": "npm run build && node scripts/demo.mjs",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "commander": "^15.0.0",

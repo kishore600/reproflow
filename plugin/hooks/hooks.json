@@ -1,0 +1,18 @@
+{
+  "description": "Warns (never blocks) when a Bash command installs Playwright, Selenium or pyautogui, or runs a new script that imports them, and points at the matching reproflow command.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/warn-browser-scripts.mjs"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
