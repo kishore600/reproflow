@@ -1,0 +1,12 @@
+# A starter flow. Edit it for your app, then run:  reproflow run example
+# Schema for editors: ../../node_modules/reproflow/schema/flow.schema.json
+name: example
+description: Open a page of the app and check that it renders
+base_url: http://localhost:3000
+allowed_hosts: [localhost, 127.0.0.1]
+params:
+  path: { type: string, default: / }
+steps:
+  - goto: "{{path}}"
+  - expect_visible: { css: body }
+on_fail: capture

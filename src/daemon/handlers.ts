@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import type { Locator, Page } from 'playwright';
 import { type Candidate, candidatesFor } from '../engine/candidates.js';
-import { formatLocator, toPlaywright } from '../engine/locators.js';
+import { formatLocator, resolveElement, toPlaywright } from '../engine/locators.js';
+import { type RunRequest, runFlow } from '../engine/run-flow.js';
 import { describeStep, executeStep, type NormalizedStep, StepFailure } from '../engine/steps.js';
 import { errorMessage, ReproflowError } from '../errors.js';
 import { createRunDir, writeBundle, writeRunJson } from '../evidence/bundle.js';
@@ -28,12 +29,6 @@ export type Handler = (params: unknown) => Promise<unknown>;
 export const SERIAL_METHODS = new Set(['do', 'capture', 'run']);
 
 const ARIA_LINE = /^-\s+([\w-]+)(?:\s+"((?:[^"\\]|\\.)*)")?/;
-
-/** The first element a locator matches, or undefined when there is none. */
-export async function resolveElement(page: Page, spec: LocatorSpec): Promise<Locator | undefined> {
-  const locator = toPlaywright(page, spec);
-  return (await locator.count().catch(() => 0)) > 0 ? locator.first() : undefined;
-}
 
 /** Role, accessible name, label and input type of the element a click/fill is about to use. */
 export async function describeElement(
@@ -244,5 +239,10 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     },
     do: (params) => handleDo(deps, params as DoParams),
     capture: (params) => handleCapture(deps, params as CaptureParams),
+    run: (params) =>
+      runFlow(
+        { session: deps.session, project: deps.project, secrets: deps.secrets },
+        params as RunRequest,
+      ),
   };
 }

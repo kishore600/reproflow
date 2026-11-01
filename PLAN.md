@@ -39,13 +39,13 @@ Decisions that deviate from or interpret the brief live in [DECISIONS.md](DECISI
 ## Phase 4 - Flows and `run`
 
 - [x] Zod flow schema (landed in phase 2 with the step engine)
-- [ ] JSON Schema export to `schema/flow.schema.json`
-- [ ] Loader with YAML paths, templating, param resolution
-- [ ] `list`, `describe`
-- [ ] Step executor, host allowlist, auth_expired detection, error codes
-- [ ] Locator candidates (Levenshtein over the aria snapshot)
-- [ ] `run` with `--headed`, `--trace`, `--keep-going`
-- [ ] Integration: pass/fail with bug on/off, candidates, auth_expired
+- [x] JSON Schema export to `schema/flow.schema.json`
+- [x] Loader with YAML paths, templating, param resolution
+- [x] `list`, `describe`
+- [x] Step executor, host allowlist, auth_expired detection, error codes
+- [x] Locator candidates (Levenshtein over the aria snapshot)
+- [x] `run` with `--headed`, `--trace`, `--keep-going`
+- [x] Integration: pass/fail with bug on/off, candidates, auth_expired
 
 ## Phase 5 - Recorder, init, stats
 

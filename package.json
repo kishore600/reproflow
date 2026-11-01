@@ -30,7 +30,7 @@
     "e2e"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node dist/cli/index.js schema --out schema/flow.schema.json",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",

@@ -4,7 +4,7 @@
 //
 // Design notes:
 // - Protected pages redirect to /login without the session cookie.
-// - Adding to cart *sets* the quantity for a SKU instead of incrementing, so a saved flow
+// - Adding to cart *replaces* the cart contents instead of accumulating, so a saved flow
 //   replays to the same total every time.
 // - SHOP_BUG=1 makes /api/cart return 500; /cart then logs "TypeError: price is undefined"
 //   and shows a $0.00 total.
@@ -146,6 +146,8 @@ export async function startShopApp({ port = 0, bug = process.env.SHOP_BUG === '1
 
     if (path === '/favicon.ico') return void res.writeHead(204).end();
     if (path === '/help') return html(res, 200, helpPage);
+    // Redirects to a different host name (127.0.0.2), to exercise a flow's host allowlist.
+    if (path === '/offsite') return redirect(res, `http://127.0.0.2:${boundPort}/help`);
 
     if (path === '/login' && req.method === 'GET') {
       return html(res, 200, loginPage(url.searchParams.get('next') ?? '/', ''));
@@ -178,7 +180,7 @@ export async function startShopApp({ port = 0, bug = process.env.SHOP_BUG === '1
         200,
         layout(
           'Shop',
-          `${nav}<h1>Shop</h1><ul><li><a href="/products/TSHIRT-M">T-Shirt (M)</a></li><li><a href="/products/HOODIE-L">Hoodie (L)</a></li></ul>`,
+          `${nav}<h1>Shop</h1><ul><li><a href="/products/TSHIRT-M">T-Shirt (M)</a></li><li><a href="/products/HOODIE-L">Hoodie (L)</a></li></ul><p><a href="http://127.0.0.2:${boundPort}/help">External docs</a></p>`,
         ),
       );
     }
@@ -208,6 +210,8 @@ export async function startShopApp({ port = 0, bug = process.env.SHOP_BUG === '1
         body = JSON.parse(await readBody(req));
       } catch {}
       if (!CATALOG[body.sku]) return json(res, 400, { error: 'unknown sku' });
+      // Replace, don't accumulate, so replaying a saved flow always ends at the same total.
+      cart.clear();
       cart.set(body.sku, Math.max(1, Math.floor(Number(body.qty) || 1)));
       return json(res, 200, { ok: true });
     }

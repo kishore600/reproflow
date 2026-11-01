@@ -57,6 +57,8 @@ export interface BundleOptions {
   fullPage?: boolean;
   /** When given, also write element.png cropped to it. */
   element?: Locator;
+  /** Set false to skip screenshot.png and snapshot.aria.yml (a passing run needs only the logs). */
+  visuals?: boolean;
 }
 
 export interface Bundle {
@@ -88,10 +90,17 @@ export async function writeBundle(options: BundleOptions): Promise<Bundle> {
   const { page, dir, events, secrets } = options;
   await mkdir(dir, { recursive: true });
 
+  const visuals = options.visuals ?? true;
   const screenshotPath = join(dir, 'screenshot.png');
-  const shot = await attempt(() =>
-    page.screenshot({ path: screenshotPath, fullPage: options.fullPage ?? false, timeout: 5_000 }),
-  );
+  const shot = visuals
+    ? await attempt(() =>
+        page.screenshot({
+          path: screenshotPath,
+          fullPage: options.fullPage ?? false,
+          timeout: 5_000,
+        }),
+      )
+    : null;
 
   let elementPath: string | null = null;
   const { element } = options;
@@ -102,7 +111,9 @@ export async function writeBundle(options: BundleOptions): Promise<Bundle> {
   }
 
   const snapshotPath = join(dir, 'snapshot.aria.yml');
-  const aria = await attempt(() => page.locator('body').ariaSnapshot({ timeout: 5_000 }));
+  const aria = visuals
+    ? await attempt(() => page.locator('body').ariaSnapshot({ timeout: 5_000 }))
+    : null;
   if (aria !== null) await writeFile(snapshotPath, `${maskText(aria, secrets)}\n`);
 
   const consoleRows = events.filter((event) => event.kind === 'console');
@@ -125,7 +136,7 @@ export async function writeBundle(options: BundleOptions): Promise<Bundle> {
       dir: toPosix(dir),
       screenshot: shot ? toPosix(screenshotPath) : null,
       snapshot: aria !== null ? toPosix(snapshotPath) : null,
-      url,
+      url: maskText(url, secrets),
       title: maskText(title, secrets),
       ...lists,
     },

@@ -1,0 +1,18 @@
+# Add a product to the cart and check the total.
+#   reproflow run repro-cart-total
+#   reproflow run repro-cart-total --sku=HOODIE-L --total='$45.00'
+name: repro-cart-total
+description: Add a product and check the cart total
+base_url: http://localhost:3000
+allowed_hosts: [localhost, 127.0.0.1]
+params:
+  sku: { type: string, default: TSHIRT-M }
+  total: { type: string, default: "$25.00" }
+  password: { type: string, secret: true, env: SHOP_PASSWORD, required: false }
+steps:
+  - goto: /products/{{sku}}
+  - click: { role: button, name: Add to cart }
+  - click: { role: link, name: Cart }
+  - expect_text: { target: { role: status, name: Total }, text: "{{total}}" }
+    timeout_ms: 3000
+on_fail: capture

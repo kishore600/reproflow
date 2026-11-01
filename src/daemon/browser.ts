@@ -1,11 +1,13 @@
 import { mkdir } from 'node:fs/promises';
 import type { BrowserContext, Page } from 'playwright';
 import type { SessionPort } from '../engine/steps.js';
-import { PageWatcher } from '../evidence/collectors.js';
+import { type EvidenceEvent, PageWatcher } from '../evidence/collectors.js';
 import { profileDir } from '../paths.js';
 import { persistCookies, restoreCookies } from './cookies.js';
 
 export const VIEWPORT = { width: 1280, height: 800 } as const;
+
+const MAX_CLOSED_WATCHERS = 20;
 
 /** Tests and CI set this to keep `--headed` from needing a display. */
 export const forceHeadless = (): boolean => process.env.REPROFLOW_FORCE_HEADLESS === '1';
@@ -20,6 +22,7 @@ export const browserChannel = (): string | undefined =>
 /** The persistent Chromium context plus per-page collectors and the "active tab". */
 export class BrowserSession implements SessionPort {
   private readonly watchers = new Map<Page, PageWatcher>();
+  private readonly closedWatchers: PageWatcher[] = [];
   private active: Page | undefined;
   private seq = 0;
 
@@ -47,9 +50,13 @@ export class BrowserSession implements SessionPort {
   }
 
   private attach(page: Page): void {
-    this.watchers.set(page, new PageWatcher(page, () => ++this.seq));
+    const watcher = new PageWatcher(page, () => ++this.seq);
+    this.watchers.set(page, watcher);
     page.on('close', () => {
       this.watchers.delete(page);
+      // A popup that closes itself mid-run should still show up in the run's evidence.
+      this.closedWatchers.push(watcher);
+      if (this.closedWatchers.length > MAX_CLOSED_WATCHERS) this.closedWatchers.shift();
       if (this.active === page) this.active = undefined;
     });
   }
@@ -57,6 +64,13 @@ export class BrowserSession implements SessionPort {
   /** Sequence number of the newest collected event; runs use it to scope their evidence. */
   get lastSeq(): number {
     return this.seq;
+  }
+
+  /** Events from every tab (open or recently closed) newer than `seq`, oldest first. */
+  eventsSince(seq: number): EvidenceEvent[] {
+    return [...this.watchers.values(), ...this.closedWatchers]
+      .flatMap((watcher) => watcher.eventsSince(seq))
+      .sort((a, b) => a.seq - b.seq);
   }
 
   pages(): Page[] {

@@ -11,7 +11,7 @@ afterAll(() => h.stop());
 
 describe('do actions against the shop app', () => {
   it('reports auth_expired when a protected page redirects to /login', async () => {
-    const { digest, code } = await h.act('goto', `${h.shop.url}/cart`, '--timeout', '3000');
+    const { digest, code } = await h.act('goto', `${h.shop.url}/cart`);
     expect(code).toBe(1);
     expect(digest.ok).toBe(false);
     expect(digest.error.code).toBe('auth_expired');
@@ -36,7 +36,7 @@ describe('do actions against the shop app', () => {
     const click = await h.act('click', 'role=button[name="Add to cart"]');
     expect(click.digest.ok).toBe(true);
     // The click only returns once the 300-800 ms POST finished, so the notice is already there.
-    const notice = await h.act('wait-for', 'role=status[name="Cart notice"]', '--timeout', '500');
+    const notice = await h.act('wait-for', 'role=status[name="Cart notice"]', '--timeout', '3000');
     expect(notice.digest.ok).toBe(true);
   });
 

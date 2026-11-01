@@ -314,9 +314,19 @@ async function authAfterSuccess(
   before: AuthSnapshot,
 ): Promise<StepFailure | null> {
   if (env.expectsLogin || !NAVIGATING.has(step.type)) return null;
-  if (step.type === 'goto' && AUTH_URL_RE.test(urlPath(step.url))) return null;
   const page = env.session.page;
   const url = page.url();
+  if (step.type === 'goto') {
+    // A goto is a fresh navigation: what the tab showed before (say, the login page a previous run
+    // ended on) does not excuse landing on one now, unless the flow asked for a login URL.
+    if (AUTH_URL_RE.test(urlPath(step.url))) return null;
+    if (AUTH_URL_RE.test(urlPath(url))) {
+      return authExpired(env, page, `Landed on ${url}, which looks like a login page`);
+    }
+    return (await hasVisiblePassword(page))
+      ? authExpired(env, page, `A password field is visible on ${url}`)
+      : null;
+  }
   if (AUTH_URL_RE.test(urlPath(url))) {
     return before.onAuthUrl
       ? null
@@ -620,6 +630,9 @@ export async function executeStep(step: NormalizedStep, env: StepEnv): Promise<S
         await env.capture?.({ fullPage: step.fullPage, target: step.target });
         break;
     }
+    // A click or redirect can trigger a navigation the allowlist blocked without the action failing.
+    const blocked = env.blockedNavigation?.();
+    if (blocked) throw hostNotAllowed(blocked);
   } catch (error) {
     throw await toFailure(error, step, env, before, locator);
   }

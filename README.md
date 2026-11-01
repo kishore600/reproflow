@@ -10,7 +10,7 @@ the repo, and replay that flow later with zero AI calls. Every command prints a 
 (at most 2,000 characters) with paths to screenshots and logs on disk.
 
 > Status: under construction. This README grows with each build phase; see [PLAN.md](PLAN.md).
-> Documented so far: sessions, login, the `do` actions, `capture` and the digest.
+> Documented so far: sessions, login, the `do` actions, `capture`, flows (`list`, `describe`, `run`) and the digest.
 
 ## Concepts
 
@@ -125,6 +125,118 @@ $ reproflow capture
 
 `--locator` also writes `element.png`, cropped to that element. If it matches nothing, the digest has
 `status: "failed"`, `error.code: "locator_not_found"` and up to 3 ranked `candidates` (exit code 1).
+
+### `reproflow list`
+
+Compact JSON, about 25 tokens per flow. Params are `name:type`, with `*` marking a required one.
+Run it before anything else.
+
+```console
+$ reproflow list
+{"flows":[{"name":"repro-cart-total","description":"Add a product and check the cart total","params":["sku:string","total:string","password:string"]}]}
+```
+
+A flow that does not parse shows as `{"name":"...","error":"..."}` so one typo does not hide the rest.
+
+### `reproflow describe <flow>`
+
+The whole flow as JSON (the parsed YAML), including every step.
+
+```console
+$ reproflow describe repro-cart-total
+{"name":"repro-cart-total","description":"Add a product and check the cart total","base_url":"http://localhost:3000","allowed_hosts":["localhost","127.0.0.1"],"params":{"sku":{"type":"string","default":"TSHIRT-M"},"total":{"type":"string","default":"$25.00"},"password":{"type":"string","required":false,"secret":true,"env":"SHOP_PASSWORD"}},"steps":[{"goto":"/products/{{sku}}"},{"click":{"role":"button","name":"Add to cart"}},{"click":{"role":"link","name":"Cart"}},{"expect_text":{"target":{"role":"status","name":"Total"},"text":"{{total}}"},"timeout_ms":3000}],"on_fail":"capture"}
+```
+
+### `reproflow run <flow> [--<param>=<value> ...] [--headed] [--trace] [--keep-going]`
+
+Replays a flow with no AI calls. It stops at the first failed step unless `--keep-going` is given.
+`--trace` adds a Playwright `trace.zip` to the run folder (open it with `npx playwright show-trace`).
+Exit code `0` passed, `1` a step failed, `2` the flow could not run.
+
+```console
+$ reproflow run repro-cart-total
+{"ok":true,"status":"passed","flow":"repro-cart-total","params":{"sku":"TSHIRT-M","total":"$25.00","password":"***"},"duration_ms":1398,"steps_total":4,"steps_passed":4,"failed_step":null,"error":null,"evidence":{"dir":"/work/shop/.reproflow/runs/20261101-123347-repro-cart-total","screenshot":null,"snapshot":null,"url":"http://localhost:3000/cart","title":"Cart - Shop","console_errors":[],"page_errors":[],"failed_requests":[]},"next":"Flow passed. Nothing more to check.","truncated":false}
+```
+
+When the app is broken, the digest says what failed and why:
+
+```console
+$ reproflow run repro-cart-total
+{"ok":false,"status":"failed","flow":"repro-cart-total","params":{"sku":"TSHIRT-M","total":"$25.00","password":"***"},"duration_ms":4508,"steps_total":4,"steps_passed":3,"failed_step":{"n":4,"type":"expect_text","target":"role=status[name=\"Total\"]","expected":"$25.00","actual":"$0.00"},"error":{"code":"assertion_failed","message":"Expected role=status[name=\"Total\"] to contain \"$25.00\" but got \"$0.00\"","hint":"Compare expected and actual, then check console_errors and failed_requests."},"evidence":{"dir":"/work/shop/.reproflow/runs/20261101-123349-repro-cart-total","screenshot":"/work/shop/.reproflow/runs/20261101-123349-repro-cart-total/screenshot.png","snapshot":"/work/shop/.reproflow/runs/20261101-123349-repro-cart-total/snapshot.aria.yml","url":"http://localhost:3000/cart","title":"Cart - Shop","console_errors":["TypeError: price is undefined"],"page_errors":[],"failed_requests":["GET /api/cart -> 500"]},"next":"Check console_errors and failed_requests, fix the app, then rerun this flow.","truncated":false}
+```
+
+A locator that does not match comes back with ranked candidates (Levenshtein similarity against the
+page's accessibility snapshot):
+
+```console
+$ reproflow run typo
+{"ok":false,"status":"failed","flow":"typo","params":{},"duration_ms":994,"steps_total":2,"steps_passed":1,"failed_step":{"n":2,"type":"click","target":"role=button[name=\"Add to cat\"]","expected":null,"actual":null},"error":{"code":"locator_not_found","message":"No element found for role=button[name=\"Add to cat\"]","hint":"Try a candidate locator, or look in snapshot.aria.yml for the right one."},"candidates":[{"locator":"role=button[name=\"Add to cart\"]","role":"button","name":"Add to cart","score":0.94}],"evidence":{"dir":"...","screenshot":"...","snapshot":"...","url":"http://127.0.0.1:3000/products/TSHIRT-M","title":"T-Shirt (M) - Shop","console_errors":[],"page_errors":[],"failed_requests":[]},"next":"Retry with role=button[name=\"Add to cart\"], or check snapshot.aria.yml.","truncated":false}
+```
+
+Problems before any step runs (`status: "error"`, exit code 2) use the same shape:
+
+```console
+$ reproflow run nope
+{"ok":false,"status":"error","flow":"nope","params":{},"duration_ms":22,"steps_total":0,"steps_passed":0,"failed_step":null,"error":{"code":"flow_not_found","message":"no flow named \"nope\" in .reproflow/flows/","hint":"Saved flows: repro-cart-total. Run `reproflow list` for details."},"evidence":null,"next":"Saved flows: repro-cart-total. Run `reproflow list` for details.","truncated":false}
+```
+
+`auth_expired` means the page landed on a URL matching `/login|signin|auth/i` (or showed a password
+field) in a step that did not expect it. Ask the user to run `reproflow login <url>`.
+
+## Flow file format
+
+Flows live in `.reproflow/flows/<name>.yaml`. A JSON Schema for editors is in
+`schema/flow.schema.json`.
+
+```yaml
+name: repro-cart-total
+description: Add a product and check the cart total
+base_url: http://localhost:3000
+allowed_hosts: [localhost, 127.0.0.1]
+params:
+  sku: { type: string, default: TSHIRT-M }
+  password: { type: string, secret: true, env: SHOP_PASSWORD }
+steps:
+  - goto: /products/{{sku}}
+  - click: { role: button, name: Add to cart }
+  - click: { role: link, name: Cart }
+  - expect_text: { target: { role: status, name: Total }, text: "$25.00" }
+on_fail: capture
+```
+
+- **`base_url`**: relative `goto` URLs resolve against it. **`allowed_hosts`**: hostnames a run may
+  navigate to (`*.example.com` matches subdomains). `localhost` and `127.0.0.1` are always allowed.
+  A navigation to any other host fails with `host_not_allowed`: a `goto`, a link click or a form post
+  is blocked before any request is sent; a redirect to another host cannot be intercepted by
+  Playwright, so it is caught as soon as the browser requests it.
+- **`params`**: `type` is `string`, `number` or `boolean`. A value comes from `--name=value`, then the
+  param's `env` variable, then its `default`. A param with no default is required unless it says
+  `required: false`. `secret: true` params are masked everywhere and may not have a default.
+- **Templating**: `{{param}}` and `{{env.NAME}}` work in any string of a step and in `base_url`. An
+  unknown name is a `flow_invalid` error. Values read through `{{env.NAME}}` are treated as secrets.
+- **Locators** are objects with one of `role` (+ `name`), `label`, `text`, `placeholder`, `testid`
+  or `css`, plus optional `exact: true` and `nth: <int>`.
+- **Every step** may set `timeout_ms` (default 10000) and `optional: true` (a failure is skipped).
+- **`on_fail`**: `capture` (default) writes the evidence bundle when a step fails; `none` skips the
+  screenshot and snapshot (logs and `run.json` are still written).
+
+| Step                                              | Shape                                                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `goto`                                            | `goto: /path` or a full URL                                                                |
+| `click`, `hover`, `check`, `uncheck`, `scroll_to` | `click: <locator>`                                                                         |
+| `fill`                                            | `fill: {target: <locator>, value: text}`                                                   |
+| `select`                                          | `select: {target: <locator>, value: option value or label}`                                |
+| `press`                                           | `press: Enter`                                                                             |
+| `switch_tab`                                      | `switch_tab: 1` (0-based index) or `switch_tab: help` (URL or title substring)             |
+| `wait_for`                                        | `wait_for: <locator>` or `{target: <locator>, state: visible\|hidden\|attached\|detached}` |
+| `expect_text`                                     | `expect_text: {target: <locator>, text: "...", exact: false}`                              |
+| `expect_visible`, `expect_hidden`                 | `expect_visible: <locator>`                                                                |
+| `expect_url`                                      | `expect_url: /cart` (path + query must match), `{contains: cart}` or `{matches: "^/c"}`    |
+| `screenshot`                                      | `screenshot: true` or `{name, full_page, target}`; saved in the run folder                 |
+| `capture`                                         | `capture: true` or `{full_page, target}`; a full evidence bundle in `capture-<n>/`         |
+
+Validation reports every problem with its YAML path and line, for example
+`steps[0].click (line 5): Unrecognized key: "rol"`.
 
 ## The digest
 

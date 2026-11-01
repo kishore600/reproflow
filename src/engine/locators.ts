@@ -150,6 +150,12 @@ export function formatLocator(spec: LocatorSpec): string {
   return text;
 }
 
+/** The first element a locator matches, or undefined when there is none. */
+export async function resolveElement(page: Page, spec: LocatorSpec): Promise<Locator | undefined> {
+  const locator = toPlaywright(page, spec);
+  return (await locator.count().catch(() => 0)) > 0 ? locator.first() : undefined;
+}
+
 export function toPlaywright(page: Page, spec: LocatorSpec): Locator {
   let locator: Locator;
   if ('role' in spec) {

@@ -11,6 +11,7 @@ import { registerLogin } from './login.js';
 import { registerMcp } from './mcp.js';
 import { registerRun } from './run.js';
 import { registerSave } from './save.js';
+import { registerSchema } from './schema.js';
 import { registerSession } from './session.js';
 import { registerStats } from './stats.js';
 
@@ -43,6 +44,7 @@ Start with: reproflow init, then reproflow list.`,
   registerSave(program);
   registerStats(program);
   registerMcp(program);
+  registerSchema(program);
   registerDaemonRun(program);
   return program;
 }
